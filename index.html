@@ -3,144 +3,431 @@
   <head>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>FISH Webport</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes">
+    <title>Google Docs</title>
+    <link rel="icon" href="https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        user-select: none;
+      }
+
+      #unity-canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+        outline: none;
+        background: #000;
+      }
+
+      #hud-bar {
+        position: fixed;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 999999;
+        opacity: 0.45;
+        transition: opacity 0.2s ease;
+      }
+
+      #hud-bar:hover {
+        opacity: 1;
+      }
+
+      .hud-btn {
+        background-color: #111;
+        color: #fff;
+        border: 2px solid #ff9900;
+        font-size: 11px;
+        font-family: 'Audiowide', sans-serif;
+        padding: 6px 12px;
+        cursor: pointer;
+        border-radius: 6px;
+        letter-spacing: 0.8px;
+        box-shadow: 0 0 8px rgba(255, 153, 0, 0.4);
+        transition: all 0.25s ease;
+      }
+
+      .hud-btn:hover {
+        background-image: linear-gradient(270deg, red, orange, yellow);
+        background-size: 300% 300%;
+        animation: fireInside 3s linear infinite;
+        color: #fff;
+        text-shadow: 0 0 8px rgba(255, 255, 255, 0.7);
+        box-shadow: inset 0 0 10px rgba(255, 165, 0, 0.4), 0 0 14px #ff9900;
+      }
+
+      .hud-btn:active {
+        transform: scale(0.96);
+      }
+
+      @keyframes fireInside {
+        0%   { background-position: 0% 50%; }
+        50%  { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+
+      #loader-overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.92);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        color: #ffffff;
+        z-index: 20;
+        transition: opacity 0.35s ease;
+        padding: 20px;
+        text-align: center;
+      }
+
+      #loader-title {
+        font-family: 'Audiowide', sans-serif;
+        font-size: 30px;
+        letter-spacing: 2px;
+        color: #ff9900;
+        text-shadow: 0 0 12px rgba(255, 153, 0, 0.5);
+        margin-bottom: 6px;
+      }
+
+      #loader-sub {
+        font-size: 13px;
+        color: #9ca3af;
+        margin-bottom: 22px;
+      }
+
+      #progress-track {
+        width: min(440px, 84vw);
+        height: 14px;
+        background: #1a1a1a;
+        border: 2px solid #ff9900;
+        border-radius: 999px;
+        overflow: hidden;
+        box-shadow: 0 0 12px rgba(255, 153, 0, 0.3);
+      }
+
+      #progress-fill {
+        width: 0%;
+        height: 100%;
+        background-image: linear-gradient(270deg, red, orange, yellow);
+        background-size: 300% 300%;
+        animation: fireInside 3s linear infinite;
+        transition: width 0.12s ease-out;
+      }
+
+      #loader-status {
+        margin-top: 10px;
+        font-size: 12px;
+        font-family: monospace;
+        color: #d1d5db;
+      }
+
+      #unity-warning {
+        position: fixed;
+        top: 54px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 200;
+        color: #000;
+        font-weight: bold;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+
+      #error-box {
+        display: none;
+        margin-top: 14px;
+        padding: 12px 16px;
+        max-width: min(500px, 88vw);
+        background: #dc2626;
+        color: #fff;
+        border-radius: 8px;
+        font-size: 13px;
+        text-align: center;
+        line-height: 1.4;
+      }
+
+      #retry-btn {
+        display: none;
+        margin-top: 10px;
+        background: #ff9900;
+        color: #000;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 14px;
+        font-family: 'Audiowide', sans-serif;
+        font-size: 11px;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
-    <div id="unity-container">
-      <canvas id="unity-canvas" width=1920 height=1080 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
+    <div id="hud-bar">
+      <button class="hud-btn" id="btn-ab" onclick="openCloaked()">about:blank</button>
+      <button class="hud-btn" id="btn-fs" onclick="toggleFullscreen()">Fullscreen</button>
     </div>
-    <!-- FISH data split: begin -->
-<script>
-(function () {
-  var DATA_NAME = "FISH Export.data.br";
-  var PARTS = ["FISH Export.data.part1.br","FISH Export.data.part2.br"];
-  var RAW_TOTAL = 400228348;
-  var origFetch = window.fetch.bind(window);
-  window.fetch = function (input, init) {
-    var url = typeof input === "string" ? input : (input && input.url) || String(input);
-    if (url.indexOf(DATA_NAME) === -1) return origFetch(input, init);
-    var base = url.substring(0, url.indexOf(DATA_NAME));
-    var idx = 0, reader = null;
-    var stream = new ReadableStream({
-      pull: async function (controller) {
-        while (true) {
-          if (!reader) {
-            if (idx >= PARTS.length) { controller.close(); return; }
-            var res = await origFetch(base + PARTS[idx], { cache: "no-store" });
-            if (!res.ok) { controller.error(new Error("Failed to load " + PARTS[idx] + " (" + res.status + ")")); return; }
-            reader = res.body.getReader();
-          }
-          var r = await reader.read();
-          if (r.done) { reader = null; idx++; continue; }
-          controller.enqueue(r.value);
+
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+    <div id="unity-warning"></div>
+
+    <div id="loader-overlay">
+      <div id="loader-title">FISH WEBPORT</div>
+      <div id="loader-sub">dmcaguy &bull; WebGL Port</div>
+      <div id="progress-track">
+        <div id="progress-fill"></div>
+      </div>
+      <div id="loader-status">Initializing...</div>
+      <div id="error-box"></div>
+      <button id="retry-btn" onclick="location.reload()">Retry</button>
+    </div>
+
+    <script>
+      const BASE_URL = new URL(".", window.location.href).href.replace(/\/$/, "");
+      const BUILD_URL = BASE_URL + "/Build";
+
+      const DATA_CHUNKS = [
+        ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part1.br.part${i}`),
+        ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part2.br.part${i}`)
+      ];
+
+      const canvas = document.getElementById("unity-canvas");
+      const overlay = document.getElementById("loader-overlay");
+      const progressFill = document.getElementById("progress-fill");
+      const statusText = document.getElementById("loader-status");
+      const warningBanner = document.getElementById("unity-warning");
+      const errorBox = document.getElementById("error-box");
+      const retryBtn = document.getElementById("retry-btn");
+      let unityInstanceRef = null;
+
+      // 1. Web Audio Auto-Unlock
+      (function () {
+        const audioCtxs = [];
+        const OrigAudioContext = window.AudioContext || window.webkitAudioContext;
+        if (OrigAudioContext) {
+          const PatchedAudioContext = function (opts) {
+            const ctx = new OrigAudioContext(opts);
+            audioCtxs.push(ctx);
+            return ctx;
+          };
+          PatchedAudioContext.prototype = OrigAudioContext.prototype;
+          window.AudioContext = PatchedAudioContext;
+          if (window.webkitAudioContext) window.webkitAudioContext = PatchedAudioContext;
+
+          const resumeAll = () => {
+            audioCtxs.forEach((c) => {
+              if (c && c.state === "suspended") c.resume().catch(() => {});
+            });
+          };
+          window.addEventListener("pointerdown", resumeAll, { passive: true });
+          window.addEventListener("keydown", resumeAll, { passive: true });
+        }
+      })();
+
+      // 2. Pointer Lock Error Guard
+      (function () {
+        const origLock = Element.prototype.requestPointerLock || function () {};
+        Element.prototype.requestPointerLock = function () {
+          try {
+            const res = origLock.apply(this, arguments);
+            if (res && typeof res.catch === "function") res.catch(() => {});
+            return res;
+          } catch (e) {}
+        };
+      })();
+
+      // 3. HUD Controls (about:blank Cloaker & Fullscreen)
+      function openCloaked() {
+        const btn = document.getElementById("btn-ab");
+        const win = window.open("about:blank", "_blank");
+        if (!win || win.closed) {
+          btn.textContent = "Allow Popups!";
+          setTimeout(() => { btn.textContent = "about:blank"; }, 3000);
           return;
         }
-      },
-      cancel: function () { if (reader) reader.cancel(); }
-    });
-    return Promise.resolve(new Response(stream, { status: 200, headers: { "Content-Type": "application/octet-stream", "Content-Length": String(RAW_TOTAL) } }));
-  };
-})();
-</script>
-<!-- FISH data split: end -->
-<script>
-      window.addEventListener("load", function () {
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register("ServiceWorker.js");
+        const clone = document.documentElement.cloneNode(true);
+        const ab = clone.querySelector("#btn-ab");
+        if (ab) ab.remove();
+
+        const head = clone.querySelector("head");
+        if (head) {
+          const base = document.createElement("base");
+          base.href = BASE_URL + "/";
+          head.insertBefore(base, head.firstChild);
         }
-      });
 
-      var container = document.querySelector("#unity-container");
-      var canvas = document.querySelector("#unity-canvas");
-      var loadingBar = document.querySelector("#unity-loading-bar");
-      var progressBarFull = document.querySelector("#unity-progress-bar-full");
-      var warningBanner = document.querySelector("#unity-warning");
+        win.document.open();
+        win.document.write("<!DOCTYPE html>\n" + clone.outerHTML);
+        win.document.close();
+      }
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
+      function toggleFullscreen() {
+        if (unityInstanceRef) {
+          unityInstanceRef.SetFullscreen(1);
+          return;
+        }
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+
       function unityShowBanner(msg, type) {
         function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+          warningBanner.style.display = warningBanner.children.length ? "block" : "none";
         }
-        var div = document.createElement('div');
+        const div = document.createElement("div");
         div.innerHTML = msg;
         warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
+        if (type === "error") {
+          div.style = "background: red; color: #fff; padding: 10px;";
+        } else {
+          if (type === "warning") div.style = "background: yellow; color: #000; padding: 10px;";
+          setTimeout(() => {
+            if (div.parentNode === warningBanner) warningBanner.removeChild(div);
             updateBannerVisibility();
           }, 5000);
         }
         updateBannerVisibility();
       }
 
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/FISH Export.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/FISH Export.data.br",
-        frameworkUrl: buildUrl + "/FISH Export.framework.js.br",
-        codeUrl: buildUrl + "/FISH Export.wasm.br",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "dmcaguy",
-        productName: "FISH",
-        productVersion: "5.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
-      };
-
-      // By default Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
+      function showError(msg) {
+        errorBox.style.display = "block";
+        errorBox.textContent = msg;
+        retryBtn.style.display = "inline-block";
       }
 
+      // 4. Pure-JS Brotli Decompressor
+      let cachedDecoder = null;
+      async function getBrotliDecoder() {
+        if (cachedDecoder) return cachedDecoder;
+        const mod = await import("https://esm.sh/brotli@1.3.3/dec/decode.js");
+        const decodeFn =
+          mod.BrotliDecompressBuffer ||
+          (mod.default && mod.default.BrotliDecompressBuffer) ||
+          mod.BrotliDecompress ||
+          (mod.default && mod.default.BrotliDecompress);
+        if (typeof decodeFn !== "function") {
+          throw new Error("Could not initialize Brotli decoder.");
+        }
+        cachedDecoder = decodeFn;
+        return cachedDecoder;
+      }
 
-      loadingBar.style.display = "block";
+      async function fetchDecompressedAsset(filename, mimeType, label) {
+        const url = `${BUILD_URL}/${encodeURIComponent(filename)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch ${filename} (HTTP ${res.status})`);
+        const compressed = new Uint8Array(await res.arrayBuffer());
+        const decode = await getBrotliDecoder();
+        statusText.textContent = `Decompressing ${label}...`;
+        await new Promise((r) => setTimeout(r, 10));
+        const raw = decode(compressed);
+        return URL.createObjectURL(new Blob([raw], { type: mimeType }));
+      }
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          progressBarFull.style.width = 100 * progress + "%";
-        }).then((unityInstance) => {
-          loadingBar.style.display = "none";
-        }).catch((message) => {
-          alert(message);
+      async function fetchDecompressedSplitData() {
+        let completed = 0;
+        const tasks = DATA_CHUNKS.map((chunkName) => {
+          const url = `${BUILD_URL}/${encodeURIComponent(chunkName)}`;
+          return fetch(url).then(async (res) => {
+            if (!res.ok) throw new Error(`Chunk ${chunkName} failed (HTTP ${res.status})`);
+            const buf = await res.arrayBuffer();
+            completed++;
+            progressFill.style.width = `${(completed / DATA_CHUNKS.length) * 60}%`;
+            statusText.textContent = `Downloading game data (${completed}/${DATA_CHUNKS.length})...`;
+            return new Uint8Array(buf);
+          });
         });
-      };
-      document.body.appendChild(script);
+
+        const parts = await Promise.all(tasks);
+        const totalLen = parts.reduce((acc, p) => acc + p.byteLength, 0);
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const p of parts) {
+          merged.set(p, offset);
+          offset += p.byteLength;
+        }
+
+        const decode = await getBrotliDecoder();
+        statusText.textContent = `Decompressing game data (${Math.round(totalLen / 1048576)} MB)...`;
+        progressFill.style.width = "70%";
+        await new Promise((r) => setTimeout(r, 25));
+
+        const rawData = decode(merged);
+        return URL.createObjectURL(new Blob([rawData], { type: "application/octet-stream" }));
+      }
+
+      // 5. Boot Unity WebGL
+      (async function boot() {
+        try {
+          statusText.textContent = "Initializing Brotli decoder...";
+          await getBrotliDecoder();
+
+          const [frameworkUrl, codeUrl, dataUrl] = await Promise.all([
+            fetchDecompressedAsset("FISH Export.framework.js.br", "application/javascript", "framework"),
+            fetchDecompressedAsset("FISH Export.wasm.br", "application/wasm", "WebAssembly"),
+            fetchDecompressedSplitData()
+          ]);
+
+          statusText.textContent = "Loading Unity runtime...";
+          progressFill.style.width = "80%";
+
+          const loaderScript = document.createElement("script");
+          loaderScript.src = `${BUILD_URL}/${encodeURIComponent("FISH Export.loader.js")}`;
+          loaderScript.onload = async () => {
+            try {
+              const config = {
+                arguments: [],
+                dataUrl: dataUrl,
+                frameworkUrl: frameworkUrl,
+                codeUrl: codeUrl,
+                streamingAssetsUrl: `${BASE_URL}/StreamingAssets`,
+                companyName: "dmcaguy",
+                productName: "FISH",
+                productVersion: "5.0",
+                showBanner: unityShowBanner,
+              };
+
+              unityInstanceRef = await createUnityInstance(canvas, config, (p) => {
+                const pct = Math.round(80 + p * 20);
+                progressFill.style.width = `${pct}%`;
+                statusText.textContent = `Starting WebGL engine (${pct}%)...`;
+              });
+
+              URL.revokeObjectURL(dataUrl);
+              URL.revokeObjectURL(frameworkUrl);
+              URL.revokeObjectURL(codeUrl);
+              overlay.style.opacity = "0";
+              setTimeout(() => overlay.remove(), 350);
+              canvas.focus();
+            } catch (err) {
+              showError(err.message || String(err));
+            }
+          };
+          loaderScript.onerror = () => showError("Failed to load Build/FISH Export.loader.js.");
+          document.body.appendChild(loaderScript);
+        } catch (err) {
+          showError(err.message || String(err));
+        }
+      })();
     </script>
   </body>
 </html>
-<script defer src="https://static.itch.io/htmlgame.js" type="text/javascript"></script>
