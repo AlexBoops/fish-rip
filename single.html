@@ -328,7 +328,7 @@
         retryBtn.style.display = "inline-block";
       }
 
-      // 5. Pure-JS Brotli Decompressor
+      // 5. Brotli Decoder (for .framework.js.br & .wasm.br, with raw passthrough fallback)
       let cachedDecoder = null;
       async function getBrotliDecoder() {
         if (cachedDecoder) return cachedDecoder;
@@ -345,31 +345,32 @@
         return cachedDecoder;
       }
 
+      async function tryBrotliDecompress(uint8) {
+        try {
+          const decode = await getBrotliDecoder();
+          return decode(uint8);
+        } catch (e) {
+          // If the file is already uncompressed despite the .br extension, return raw bytes
+          return uint8;
+        }
+      }
+
       async function fetchDecompressedAsset(filename, mimeType, label) {
         const url = `${CDN_BUILD}/${encodeURIComponent(filename)}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error(`Failed to fetch ${filename} (HTTP ${res.status})`);
         const compressed = new Uint8Array(await res.arrayBuffer());
-        const decode = await getBrotliDecoder();
-        statusText.textContent = `Decompressing ${label}...`;
-        await new Promise((r) => setTimeout(r, 10));
-        const raw = decode(compressed);
+        statusText.textContent = `Preparing ${label}...`;
+        const raw = await tryBrotliDecompress(compressed);
         return URL.createObjectURL(new Blob([raw], { type: mimeType }));
       }
 
-      async function fetchDecompressedSplitAsset(chunkList, mimeType, label, trackProgress) {
-        let completed = 0;
-        const tasks = chunkList.map((chunkName) => {
+      async function fetchSplitWasmBlob() {
+        const tasks = WASM_CHUNKS.map((chunkName) => {
           const url = `${CDN_BUILD}/${encodeURIComponent(chunkName)}`;
           return fetch(url).then(async (res) => {
             if (!res.ok) throw new Error(`Chunk ${chunkName} failed (HTTP ${res.status})`);
-            const buf = await res.arrayBuffer();
-            completed++;
-            if (trackProgress) {
-              progressFill.style.width = `${(completed / chunkList.length) * 60}%`;
-              statusText.textContent = `Downloading ${label} (${completed}/${chunkList.length})...`;
-            }
-            return new Uint8Array(buf);
+            return new Uint8Array(await res.arrayBuffer());
           });
         });
 
@@ -382,25 +383,38 @@
           offset += p.byteLength;
         }
 
-        const decode = await getBrotliDecoder();
-        statusText.textContent = `Decompressing ${label} (${Math.round(totalLen / 1048576)} MB)...`;
-        if (trackProgress) progressFill.style.width = "70%";
-        await new Promise((r) => setTimeout(r, 25));
+        const raw = await tryBrotliDecompress(merged);
+        return URL.createObjectURL(new Blob([raw], { type: "application/wasm" }));
+      }
 
-        const raw = decode(merged);
-        return URL.createObjectURL(new Blob([raw], { type: mimeType }));
+      // Data chunks are already raw uncompressed UnityWebData1.0 (382 MB) — stitch directly!
+      async function fetchRawSplitDataBlob() {
+        let completed = 0;
+        const tasks = DATA_CHUNKS.map((chunkName) => {
+          const url = `${CDN_BUILD}/${encodeURIComponent(chunkName)}`;
+          return fetch(url).then(async (res) => {
+            if (!res.ok) throw new Error(`Chunk ${chunkName} failed (HTTP ${res.status})`);
+            const buf = await res.arrayBuffer();
+            completed++;
+            progressFill.style.width = `${(completed / DATA_CHUNKS.length) * 75}%`;
+            statusText.textContent = `Downloading game data (${completed}/${DATA_CHUNKS.length})...`;
+            return buf;
+          });
+        });
+
+        const buffers = await Promise.all(tasks);
+        return URL.createObjectURL(new Blob(buffers, { type: "application/octet-stream" }));
       }
 
       // 6. Boot Unity WebGL
       (async function boot() {
         try {
-          statusText.textContent = "Initializing Brotli decoder...";
-          await getBrotliDecoder();
+          statusText.textContent = `Downloading game data (0/${DATA_CHUNKS.length})...`;
 
           const [frameworkUrl, codeUrl, dataUrl] = await Promise.all([
             fetchDecompressedAsset("FISH Export.framework.js.br", "application/javascript", "framework"),
-            fetchDecompressedSplitAsset(WASM_CHUNKS, "application/wasm", "WebAssembly", false),
-            fetchDecompressedSplitAsset(DATA_CHUNKS, "application/octet-stream", "game data", true)
+            fetchSplitWasmBlob(),
+            fetchRawSplitDataBlob()
           ]);
 
           statusText.textContent = "Loading Unity runtime...";
