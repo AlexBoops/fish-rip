@@ -202,6 +202,7 @@
       const BASE_URL = new URL(".", window.location.href).href.replace(/\/$/, "");
       const BUILD_URL = BASE_URL + "/Build";
 
+      const WASM_CHUNKS = Array.from({ length: 4 }, (_, i) => `FISH Export.wasm.br.part${i}`);
       const DATA_CHUNKS = [
         ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part1.br.part${i}`),
         ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part2.br.part${i}`)
@@ -343,16 +344,18 @@
         return URL.createObjectURL(new Blob([raw], { type: mimeType }));
       }
 
-      async function fetchDecompressedSplitData() {
+      async function fetchDecompressedSplitAsset(chunkList, mimeType, label, trackProgress) {
         let completed = 0;
-        const tasks = DATA_CHUNKS.map((chunkName) => {
+        const tasks = chunkList.map((chunkName) => {
           const url = `${BUILD_URL}/${encodeURIComponent(chunkName)}`;
           return fetch(url).then(async (res) => {
             if (!res.ok) throw new Error(`Chunk ${chunkName} failed (HTTP ${res.status})`);
             const buf = await res.arrayBuffer();
             completed++;
-            progressFill.style.width = `${(completed / DATA_CHUNKS.length) * 60}%`;
-            statusText.textContent = `Downloading game data (${completed}/${DATA_CHUNKS.length})...`;
+            if (trackProgress) {
+              progressFill.style.width = `${(completed / chunkList.length) * 60}%`;
+              statusText.textContent = `Downloading ${label} (${completed}/${chunkList.length})...`;
+            }
             return new Uint8Array(buf);
           });
         });
@@ -367,12 +370,12 @@
         }
 
         const decode = await getBrotliDecoder();
-        statusText.textContent = `Decompressing game data (${Math.round(totalLen / 1048576)} MB)...`;
-        progressFill.style.width = "70%";
+        statusText.textContent = `Decompressing ${label} (${Math.round(totalLen / 1048576)} MB)...`;
+        if (trackProgress) progressFill.style.width = "70%";
         await new Promise((r) => setTimeout(r, 25));
 
-        const rawData = decode(merged);
-        return URL.createObjectURL(new Blob([rawData], { type: "application/octet-stream" }));
+        const raw = decode(merged);
+        return URL.createObjectURL(new Blob([raw], { type: mimeType }));
       }
 
       // 5. Boot Unity WebGL
@@ -383,8 +386,8 @@
 
           const [frameworkUrl, codeUrl, dataUrl] = await Promise.all([
             fetchDecompressedAsset("FISH Export.framework.js.br", "application/javascript", "framework"),
-            fetchDecompressedAsset("FISH Export.wasm.br", "application/wasm", "WebAssembly"),
-            fetchDecompressedSplitData()
+            fetchDecompressedSplitAsset(WASM_CHUNKS, "application/wasm", "WebAssembly", false),
+            fetchDecompressedSplitAsset(DATA_CHUNKS, "application/octet-stream", "game data", true)
           ]);
 
           statusText.textContent = "Loading Unity runtime...";
