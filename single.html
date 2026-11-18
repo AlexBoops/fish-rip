@@ -202,7 +202,7 @@
       const REPO_ROOT = "https://cdn.jsdelivr.net/gh/AlexBoops/fish-rip@main";
       const CDN_BUILD = REPO_ROOT + "/Build";
 
-      // 22 ordered chunks: part1.br.part0..10 followed by part2.br.part0..10
+      const WASM_CHUNKS = Array.from({ length: 4 }, (_, i) => `FISH Export.wasm.br.part${i}`);
       const DATA_CHUNKS = [
         ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part1.br.part${i}`),
         ...Array.from({ length: 11 }, (_, i) => `FISH Export.data.part2.br.part${i}`)
@@ -328,7 +328,7 @@
         retryBtn.style.display = "inline-block";
       }
 
-      // 5. Pure-JS Brotli Decompressor (esm.sh/brotli@1.3.3/dec/decode.js)
+      // 5. Pure-JS Brotli Decompressor
       let cachedDecoder = null;
       async function getBrotliDecoder() {
         if (cachedDecoder) return cachedDecoder;
@@ -357,16 +357,18 @@
         return URL.createObjectURL(new Blob([raw], { type: mimeType }));
       }
 
-      async function fetchDecompressedSplitData() {
+      async function fetchDecompressedSplitAsset(chunkList, mimeType, label, trackProgress) {
         let completed = 0;
-        const tasks = DATA_CHUNKS.map((chunkName) => {
+        const tasks = chunkList.map((chunkName) => {
           const url = `${CDN_BUILD}/${encodeURIComponent(chunkName)}`;
           return fetch(url).then(async (res) => {
             if (!res.ok) throw new Error(`Chunk ${chunkName} failed (HTTP ${res.status})`);
             const buf = await res.arrayBuffer();
             completed++;
-            progressFill.style.width = `${(completed / DATA_CHUNKS.length) * 60}%`;
-            statusText.textContent = `Downloading game data (${completed}/${DATA_CHUNKS.length})...`;
+            if (trackProgress) {
+              progressFill.style.width = `${(completed / chunkList.length) * 60}%`;
+              statusText.textContent = `Downloading ${label} (${completed}/${chunkList.length})...`;
+            }
             return new Uint8Array(buf);
           });
         });
@@ -381,12 +383,12 @@
         }
 
         const decode = await getBrotliDecoder();
-        statusText.textContent = `Decompressing game data (${Math.round(totalLen / 1048576)} MB)...`;
-        progressFill.style.width = "70%";
+        statusText.textContent = `Decompressing ${label} (${Math.round(totalLen / 1048576)} MB)...`;
+        if (trackProgress) progressFill.style.width = "70%";
         await new Promise((r) => setTimeout(r, 25));
 
-        const rawData = decode(merged);
-        return URL.createObjectURL(new Blob([rawData], { type: "application/octet-stream" }));
+        const raw = decode(merged);
+        return URL.createObjectURL(new Blob([raw], { type: mimeType }));
       }
 
       // 6. Boot Unity WebGL
@@ -397,8 +399,8 @@
 
           const [frameworkUrl, codeUrl, dataUrl] = await Promise.all([
             fetchDecompressedAsset("FISH Export.framework.js.br", "application/javascript", "framework"),
-            fetchDecompressedAsset("FISH Export.wasm.br", "application/wasm", "WebAssembly"),
-            fetchDecompressedSplitData()
+            fetchDecompressedSplitAsset(WASM_CHUNKS, "application/wasm", "WebAssembly", false),
+            fetchDecompressedSplitAsset(DATA_CHUNKS, "application/octet-stream", "game data", true)
           ]);
 
           statusText.textContent = "Loading Unity runtime...";
